@@ -10,7 +10,7 @@ import { ScrapperComponent } from './components/scrapper.js';
 import { RadioComponent } from './components/radio.js';
 import { showNotification, initNotifications } from './ui/notifications.js';
 import { initLayoutToggles } from './ui/layout.js';
-import { LABELS_PLAYLIST } from '../../constants/labels_playlist.js';
+import { LABELS_PLAYLIST } from '../constants/labels_playlist.js';
 
 // ============ INITIALISATION DES LABELS ============
 // (inchangée, purement DOM)

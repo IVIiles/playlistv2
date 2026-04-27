@@ -1,0 +1,37 @@
+# Protection du dossier backend
+# Empêche l'accès direct aux fichiers PHP
+
+# Désactiver l'affichage des erreurs en production
+php_flag display_errors Off
+php_flag log_errors On
+
+# Bloquer l'accès direct aux fichiers non autorisés
+<FilesMatch "\.(php|inc|log|sql|sh|bash)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Autoriser uniquement api.php et api_yt.php
+<Files "api.php">
+    Order Allow,Deny
+    Allow from all
+</Files>
+
+<Files "api_yt.php">
+    Order Allow,Deny
+    Allow from all
+</Files>
+
+# Protection contre le hotlinking (optionnel)
+RewriteEngine On
+RewriteCond %{HTTP_REFERER} !^$
+RewriteCond %{HTTP_REFERER} !^https?://(www\.)?votre-domaine\.com [NC]
+RewriteRule \.(php)$ - [F,L]
+
+# Forcer UTF-8
+AddDefaultCharset UTF-8
+
+# Compression Gzip pour JSON
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>

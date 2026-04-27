@@ -2,7 +2,7 @@
 // Gère la modale "Nouveautés" : affichage des 20 fichiers CSV les plus récents.
 
 import { escapeHtml } from '../utils.js';
-import { LABELS_PLAYLIST } from './constants/labels_playlist.js';
+import { LABELS_PLAYLIST } from '../constants/labels_playlist.js';
 
 export class RecentComponent extends EventTarget {
     /**

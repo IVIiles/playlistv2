@@ -1100,7 +1100,7 @@ input:focus-visible {
 @media (max-width: 900px) {
     /* Afficher les onglets de navigation mobile */
     .mobile-nav-tabs {
-        display: flex;
+        display: flex !important;
     }
 
     #playlist-app {
@@ -1111,35 +1111,29 @@ input:focus-visible {
         gap: 10px;
     }
 
-    /* Cacher header desktop sur mobile quand un onglet est actif */
+    /* Cacher header desktop sur mobile */
     #playlist-header {
-        display: none;
+        display: none !important;
     }
 
-    /* Sidebars en mode onglets - une seule visible à la fois */
+    /* Sidebars en mode onglets - TOUTES cachées par défaut */
     .navigation-bar,
     .playlist-container,
     .video-container {
-        width: 100% !important;
-        position: absolute;
-        top: 110px; /* Header + tabs height */
-        left: 0;
-        right: 0;
-        bottom: 0;
-        transform: translateX(100%);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-        pointer-events: none;
+        display: none !important;
+        width: 100%;
+        position: static;
+        transform: none;
+        opacity: 1;
+        pointer-events: auto;
     }
 
+    /* Une seule vue visible à la fois via active-view */
     .navigation-bar.active-view,
     .playlist-container.active-view,
     .video-container.active-view {
-        transform: translateX(0);
-        opacity: 1;
-        pointer-events: all;
-        position: relative;
-        top: auto;
+        display: block !important;
+        position: static;
     }
 
     .navigation-bar {
@@ -1193,24 +1187,6 @@ input:focus-visible {
         display: none;
     }
 
-    /* Sidebars en pleine largeur */
-    .navigation-bar {
-        width: 100% !important;
-        order: 1;
-        max-height: 300px;
-    }
-
-    .playlist-container {
-        width: 100% !important;
-        order: 2;
-        max-height: 400px;
-    }
-
-    .video-container {
-        width: 100% !important;
-        order: 3;
-    }
-
     /* Boutons plus grands pour le tactile */
     .shuffle-btn,
     .player-btn,
@@ -1222,12 +1198,7 @@ input:focus-visible {
         min-height: 44px; /* Taille minimale tactile */
     }
 
-    /* Sidebar collapsed */
-    .sidebar.collapsed {
-        display: block !important;
-        width: 100% !important;
-        opacity: 1 !important;
-    }
+    /* En mobile, collapsed n'a pas de sens car on utilise les onglets */
 }
 
 /* Mobiles (max-width: 600px) */

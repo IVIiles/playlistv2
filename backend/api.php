@@ -223,6 +223,44 @@ switch ($action) {
         $folders = scanDirectory('', $depth);
         jsonResponse(['success' => true, 'folders' => $folders]);
         break;
+    
+    case 'scanRecursive':
+        $depth = (int)($_GET[Config::PARAM_DEPTH] ?? 3);
+        $folders = scanDirectory('', $depth);
+        jsonResponse(['success' => true, 'folders' => $folders]);
+        break;
+        
+    case 'recent':
+        // Scanner tous les dossiers et retourner les fichiers récents
+        $allFiles = [];
+        $rootPath = Config::DIR_PLAYLISTS;
+        
+        if (is_dir($rootPath)) {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($rootPath, RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            
+            foreach ($iterator as $file) {
+                if ($file->isFile() && pathinfo($file->getFilename(), PATHINFO_EXTENSION) === Config::EXT_CSV) {
+                    $allFiles[] = [
+                        'path' => str_replace($rootPath, '', $file->getPathname()),
+                        'name' => $file->getFilename(),
+                        'mtime' => $file->getMTime(),
+                        'size' => $file->getSize()
+                    ];
+                }
+            }
+        }
+        
+        // Trier par date de modification décroissante
+        usort($allFiles, function($a, $b) {
+            return $b['mtime'] - $a['mtime'];
+        });
+        
+        // Retourner les 20 plus récents
+        $recentFiles = array_slice($allFiles, 0, 20);
+        jsonResponse(['success' => true, 'files' => $recentFiles]);
+        break;
         
     case 'load':
         if (empty($path)) {

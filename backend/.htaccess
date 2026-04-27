@@ -5,6 +5,13 @@
 php_flag display_errors Off
 php_flag log_errors On
 
+# CORS - Autoriser les requêtes depuis le frontend (InfinityFree)
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
 # Bloquer l'accès direct aux fichiers non autorisés
 <FilesMatch "\.(php|inc|log|sql|sh|bash)$">
     Order Deny,Allow
@@ -22,11 +29,8 @@ php_flag log_errors On
     Allow from all
 </Files>
 
-# Protection contre le hotlinking (optionnel)
-RewriteEngine On
-RewriteCond %{HTTP_REFERER} !^$
-RewriteCond %{HTTP_REFERER} !^https?://(www\.)?votre-domaine\.com [NC]
-RewriteRule \.(php)$ - [F,L]
+# IMPORTANT: Désactiver RewriteEngine pour éviter conflits InfinityFree
+RewriteEngine Off
 
 # Forcer UTF-8
 AddDefaultCharset UTF-8

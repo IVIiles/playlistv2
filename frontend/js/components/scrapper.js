@@ -3,6 +3,7 @@
 // appel API de scraping, téléchargement du CSV généré.
 
 import { escapeHtml } from '../utils.js';
+import { LABELS_PLAYLIST } from '../../constants/labels_playlist.js';
 
 export class ScrapperComponent extends EventTarget {
     /**

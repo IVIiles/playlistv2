@@ -3,6 +3,7 @@
 // la navigation, le clic droit, l'expansion / réduction.
 
 import { escapeHtml } from '../utils.js';
+import { ICONS_PLAYLIST } from '../../constants/icons_playlist.js';
 
 export class TreeComponent extends EventTarget {
     /**

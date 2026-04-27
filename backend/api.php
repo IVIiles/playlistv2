@@ -2,6 +2,30 @@
 
 declare(strict_types=1);
 
+// ============ SÉCURITÉ : HEADERS HTTP ============
+// Protection contre les attaques XSS, clickjacking, MIME sniffing
+
+header('X-Frame-Options: SAMEORIGIN');
+header('X-XSS-Protection: 1; mode=block');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+
+// Rate limiting simple basé sur session (1 req/sec)
+session_start();
+$currentTime = microtime(true);
+$lastRequest = $_SESSION['last_request'] ?? 0;
+$minInterval = 1.0; // 1 seconde minimum entre requêtes
+
+if (($currentTime - $lastRequest) < $minInterval) {
+    http_response_code(429); // Too Many Requests
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Trop de requêtes. Veuillez patienter.']);
+    exit;
+}
+
+$_SESSION['last_request'] = $currentTime;
+
 // ============ CONFIGURATION ============
 // Configuration centralisée - SSOT
 

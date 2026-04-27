@@ -29,6 +29,11 @@
     margin: 0;
     padding: var(--margin-size);
     gap: var(--margin-size);
+    
+    /* Optimisations mobile */
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* ============ RESET ============ */
@@ -443,6 +448,10 @@ html, body {
     border-radius: 4px;
     transition: background 0.2s;
     user-select: none;
+    
+    /* Optimisation tactile */
+    touch-action: manipulation;
+    -webkit-user-select: none;
 }
 
 #playlist-app .folder-item:hover {
@@ -555,6 +564,11 @@ html, body {
     cursor: pointer;
     font-size: 0.9em;
     transition: background 0.2s;
+    
+    /* Optimisation tactile */
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #playlist-app .sidebar-toggle:hover {
@@ -640,6 +654,11 @@ html, body {
     cursor: pointer;
     transition: all 0.3s;
     white-space: nowrap;
+    
+    /* Optimisation tactile */
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #playlist-app .shuffle-btn:hover,
@@ -664,6 +683,10 @@ html, body {
     transition: background 0.3s;
     user-select: none;
     font-size: 0.9em;
+    
+    /* Optimisation tactile */
+    touch-action: manipulation;
+    -webkit-user-select: none;
 }
 
 #playlist-app .playlist-item:active {
@@ -1033,22 +1056,154 @@ input:focus-visible {
     }
 }
 
-/* ============ RESPONSIVE ============ */
+/* ============ RESPONSIVE MOBILE COMPLET ============ */
+
+/* Mobile Nav Tabs - Système d'onglets pour mobile */
+.mobile-nav-tabs {
+    display: none; /* Caché par défaut, visible uniquement sur mobile */
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: var(--bg-color);
+    border-bottom: 2px solid var(--border-color);
+    padding: 0;
+    gap: 0;
+}
+
+.mobile-tab-btn {
+    flex: 1;
+    padding: 14px 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    font-size: 1.2em;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+    text-align: center;
+    min-height: 48px; /* Taille tactile optimale */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tab-btn.active {
+    border-bottom-color: var(--primary-color);
+    background: var(--overlay-medium);
+    color: var(--primary-color);
+}
+
+.mobile-tab-btn:hover:not(.active) {
+    background: var(--overlay-light);
+}
+
+/* Tablettes et petits écrans (max-width: 900px) */
 @media (max-width: 900px) {
+    /* Afficher les onglets de navigation mobile */
+    .mobile-nav-tabs {
+        display: flex;
+    }
+
     #playlist-app {
         flex-direction: column;
         overflow-y: auto;
         margin: 5px;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    /* Cacher header desktop sur mobile quand un onglet est actif */
+    #playlist-header {
+        display: none;
+    }
+
+    /* Sidebars en mode onglets - une seule visible à la fois */
+    .navigation-bar,
+    .playlist-container,
+    .video-container {
+        width: 100% !important;
+        position: absolute;
+        top: 110px; /* Header + tabs height */
+        left: 0;
+        right: 0;
+        bottom: 0;
+        transform: translateX(100%);
+        opacity: 0;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        pointer-events: none;
+    }
+
+    .navigation-bar.active-view,
+    .playlist-container.active-view,
+    .video-container.active-view {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: all;
+        position: relative;
+        top: auto;
     }
 
     .navigation-bar {
+        order: 1;
+        max-height: calc(100vh - 120px);
+    }
+
+    .video-container {
+        order: 2;
+    }
+
+    .playlist-container {
+        order: 3;
+        max-height: calc(100vh - 120px);
+    }
+
+    /* Header adaptatif */
+    #playlist-header {
+        flex-wrap: wrap;
+        padding: 10px;
+        min-height: auto;
+        gap: 10px;
+    }
+
+    .header-title-container {
+        width: 100%;
+        justify-content: center;
+        order: 1;
+    }
+
+    .header-options-container {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        order: 2;
+        gap: 8px;
+    }
+
+    .header-option-btn {
+        padding: 6px 10px;
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+
+    .sidebar-toggle-left,
+    .sidebar-toggle-right {
+        margin: 0 5px;
+    }
+
+    .header-spacer {
+        display: none;
+    }
+
+    /* Sidebars en pleine largeur */
+    .navigation-bar {
         width: 100% !important;
         order: 1;
+        max-height: 300px;
     }
 
     .playlist-container {
         width: 100% !important;
         order: 2;
+        max-height: 400px;
     }
 
     .video-container {
@@ -1056,14 +1211,242 @@ input:focus-visible {
         order: 3;
     }
 
+    /* Boutons plus grands pour le tactile */
     .shuffle-btn,
-    .player-btn {
-        padding: 15px 30px;
+    .player-btn,
+    .header-option-btn,
+    .nav-header-btn,
+    .sidebar-toggle {
+        padding: 12px 20px;
+        font-size: 0.9em;
+        min-height: 44px; /* Taille minimale tactile */
     }
 
+    /* Sidebar collapsed */
     .sidebar.collapsed {
         display: block !important;
         width: 100% !important;
         opacity: 1 !important;
+    }
+}
+
+/* Mobiles (max-width: 600px) */
+@media (max-width: 600px) {
+    #playlist-app {
+        padding: 5px;
+        gap: 8px;
+    }
+
+    /* Header compact */
+    #playlist-header {
+        padding: 8px;
+    }
+
+    .header-title {
+        font-size: 1em;
+    }
+
+    .header-back-btn {
+        width: 28px;
+        height: 28px;
+        background-size: 18px 18px;
+    }
+
+    .header-option-btn {
+        padding: 5px 8px;
+        font-size: 0.75em;
+    }
+
+    /* Navigation sidebar réduite */
+    .navigation-bar {
+        max-height: 250px;
+    }
+
+    .nav-header h3 {
+        font-size: 0.9em;
+    }
+
+    .nav-header-btn {
+        padding: 4px 6px;
+        font-size: 0.7em;
+    }
+
+    .folder-tree {
+        padding: 5px;
+    }
+
+    .folder-item,
+    .file-item {
+        padding: 8px 6px;
+    }
+
+    .folder-name,
+    .file-name {
+        font-size: 0.8em;
+    }
+
+    /* Playlist sidebar réduite */
+    .playlist-container {
+        max-height: 350px;
+        padding: 10px;
+    }
+
+    .playlist-header h3 {
+        font-size: 0.95em;
+    }
+
+    .playlist-count {
+        font-size: 0.8em;
+    }
+
+    .search-input {
+        padding: 6px 10px;
+        padding-right: 30px;
+        font-size: 0.9em;
+    }
+
+    .clear-search {
+        font-size: 14px;
+        right: 8px;
+    }
+
+    .playlist-item {
+        padding: 8px;
+        font-size: 0.85em;
+        margin-bottom: 4px;
+    }
+
+    /* Vidéo optimisée */
+    .video-player {
+        border-radius: 8px;
+    }
+
+    .video-title {
+        font-size: 1em;
+        text-align: center;
+    }
+
+    .player-controls {
+        gap: 5px;
+    }
+
+    .player-btn {
+        padding: 10px 15px;
+        font-size: 1.2em;
+    }
+
+    /* Modales plein écran */
+    .mod-container {
+        width: 95% !important;
+        max-width: none !important;
+        max-height: 90vh !important;
+        margin: 5px;
+    }
+
+    .mod-header h2 {
+        font-size: 1.1em;
+    }
+
+    .mod-close-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 1.2em;
+    }
+
+    .mod-content {
+        padding: 15px;
+    }
+
+    /* Grille de cartes responsive */
+    .mod-cards-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+
+    .mod-card {
+        padding: 12px;
+    }
+
+    /* Recherche mobile */
+    .search-options {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .search-option {
+        font-size: 0.9em;
+    }
+
+    .search-results {
+        max-height: 300px;
+    }
+
+    /* Context menu adapté */
+    .context-menu {
+        min-width: 200px;
+    }
+
+    .context-menu button {
+        padding: 10px 15px;
+        font-size: 0.9em;
+    }
+}
+
+/* Très petits écrans (max-width: 400px) */
+@media (max-width: 400px) {
+    .header-option-btn {
+        padding: 4px 6px;
+        font-size: 0.7em;
+    }
+
+    .player-btn {
+        padding: 8px 12px;
+        font-size: 1em;
+    }
+
+    .folder-name,
+    .file-name,
+    .playlist-item {
+        font-size: 0.75em;
+    }
+
+    .mod-card-artist {
+        font-size: 1em;
+    }
+
+    .mod-card-album,
+    .mod-card-style,
+    .mod-card-date {
+        font-size: 0.85em;
+    }
+}
+
+/* Mode paysage mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    #playlist-app {
+        max-height: 100vh;
+    }
+
+    .main-content {
+        max-height: calc(100vh - 80px);
+    }
+
+    .navigation-bar,
+    .playlist-container {
+        max-height: none;
+    }
+
+    .video-player {
+        max-height: 50vh;
+    }
+}
+
+/* Préférence réduction mouvement */
+@media (prefers-reduced-motion: reduce) {
+    #playlist-app *,
+    #playlist-app *::before,
+    #playlist-app *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
     }
 }

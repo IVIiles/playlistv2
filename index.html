@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<!-- ============ HEAD ============ -->
+<!-- Métadonnées et ressources de la page -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-label="title">Playlist de Miles - Sélection</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+    <link rel="stylesheet" href="frontend/css/style.css">
+    <script src="constants/labels_playlist.js"></script>
+    <script src="constants/icons_playlist.js"></script>
+</head>
+
+<!-- ============ BODY ============ -->
+<!-- Contenu principal de l'application -->
+<body>
+<!-- ============ PLAYLIST APP ============ -->
+<!-- Conteneur principal avec layout flex -->
+<div id="playlist-app">
+
+<!-- ============ HEADER ============ -->
+<!-- Barre de titre avec navigation et options -->
+<header id="playlist-header">
+    <!-- Container gauche : Retour + Titre -->
+    <div class="header-title-container">
+        <button class="header-back-btn" id="headerBackBtn"></button>
+        <h1 class="header-title" data-label="header_title">Playlist V2</h1>
+    </div>
+    
+    <!-- Container centre : Options -->
+    <div class="header-options-container">
+        <button class="sidebar-toggle sidebar-toggle-left" id="toggleNavSidebar">☰</button>
+        <button class="header-option-btn" id="btnNouveautes" data-label="btn_nouveautes">Les nouveautés</button>
+        <button class="header-option-btn" id="btnRechercher" data-label="btn_rechercher">Rechercher</button>
+        <button class="header-option-btn" id="btnRadio" data-label="btn_radio">Radio</button>
+        <button class="header-option-btn" id="btnScrapper" data-label="btn_scrapper">Scrapper</button>
+        <button class="sidebar-toggle sidebar-toggle-right" id="togglePlaylistSidebar">☰</button>
+    </div>
+    
+    <!-- Container droite (vide pour équilibrage) -->
+    <div class="header-spacer"></div>
+</header>
+
+<!-- ============ MAIN CONTENT ============ -->
+<!-- Conteneur pour sidebars + video (layout horizontal) -->
+<div class="main-content">
+
+<!-- ============ NAVIGATION SIDEBAR (Gauche) ============ -->
+<!-- Arborescence dossiers et fichiers -->
+<aside class="sidebar navigation-bar" id="navSidebar">
+    <!-- ============ NAV HEADER ============ -->
+    <!-- Header avec titre et boutons expand/collapse -->
+    <div class="nav-header">
+        <h3 data-label="nav_title">Arborescence</h3>
+        <div class="nav-header-buttons">
+            <button class="nav-header-btn" id="expandAllBtn" data-label="expand_all">Tout déplier</button>
+            <button class="nav-header-btn" id="collapseAllBtn" data-label="collapse_all">Tout replier</button>
+        </div>
+    </div>
+
+    <!-- ============ FOLDER TREE ============ -->
+    <!-- Arborescence dossiers et fichiers -->
+    <div class="folder-tree" id="folderTree"></div>
+</aside>
+
+<!-- ============ VIDEO CONTAINER (Centre) ============ -->
+<!-- Lecteur YouTube et contrôles de lecture -->
+<main class="video-container" id="videoContainer">
+
+    <div class="video-header">
+        <div class="video-title" id="videoTitleTop"></div>
+        <div class="player-controls">
+            <button class="player-btn prev-btn">⏮</button>
+            <button class="player-btn play-pause-btn">⏸</button>
+            <button class="player-btn next-btn">⏭</button>
+            <button class="player-btn restart-btn">⟲</button>
+        </div>
+    </div>
+
+    <div id="youtubePlayer" class="video-player">
+        <div class="player-loader" id="playerLoader" data-label="loader">Chargement...</div>
+    </div>
+</main>
+
+<!-- ============ PLAYLIST SIDEBAR (Droite) ============ -->
+<!-- Liste des titres avec recherche et contrôles -->
+<aside class="sidebar playlist-container" id="playlistSidebar">
+    <div class="playlist-header">
+        <h3 data-label="playlist_title">Playlist</h3>
+        <span class="playlist-count" id="playlistCount">0 titres</span>
+    </div>
+    
+    <div class="playlist-controls">
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="Rechercher..." data-label="search">
+            <button class="clear-search" id="clearSearch">×</button>
+        </div>
+        <button class="shuffle-btn" id="shuffleBtn">🔀 Mélanger</button>
+    </div>
+
+    <div class="playlist-content-scroll">
+        <ul class="playlist" id="videoPlaylist">
+        </ul>
+    </div>
+</aside>
+
+</div>
+
+<!-- ============ MODALE NOUVEAUTÉS ============ -->
+<div id="mod-nouveautes" class="mod-overlay">
+    <div class="mod-container">
+        <div class="mod-header">
+            <h2 data-label="mod_nouveautes_title">Les nouveautés</h2>
+            <button class="mod-close-btn" id="modNouveautesClose">×</button>
+        </div>
+        <div class="mod-content" id="mod-nouveaute-app">
+            <!-- Contenu dynamique -->
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODALE RECHERCHER ============ -->
+<div id="mod-rechercher" class="mod-overlay">
+    <div class="mod-container">
+        <div class="mod-header">
+            <h2 data-label="mod_rechercher_title">Rechercher</h2>
+            <button class="mod-close-btn" id="modRechercherClose">×</button>
+        </div>
+        <div class="mod-content" id="mod-rechercher-app">
+            <!-- Zone recherche -->
+            <div class="search-container-modal">
+                <input type="text" id="searchInputModal" class="search-input-modal" placeholder="Rechercher..." data-label="search_placeholder">
+                <button class="clear-search-modal" id="clearSearchModal">×</button>
+            </div>
+            
+            <!-- Options -->
+            <div class="search-options">
+                <label class="search-option">
+                    <input type="checkbox" id="searchArtist" checked> 
+                    <span data-label="opt_artist">Artiste</span>
+                </label>
+                <label class="search-option">
+                    <input type="checkbox" id="searchAlbum"> 
+                    <span data-label="opt_album">Album</span>
+                </label>
+                <label class="search-option">
+                    <input type="checkbox" id="searchTitle"> 
+                    <span data-label="opt_title">Titre</span>
+                </label>
+            </div>
+            
+            <!-- Status -->
+            <div class="search-status" id="searchStatus"></div>
+            
+            <!-- Résultats -->
+            <div class="search-results" id="searchResults"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODALE SCRAPPER ============ -->
+<div id="mod-scrapper" class="mod-overlay">
+    <div class="mod-container">
+        <div class="mod-header">
+            <h2 data-label="mod_scrapper_title">Scrapper</h2>
+            <button class="mod-close-btn" id="modScrapperClose">×</button>
+        </div>
+        <div class="mod-content" id="mod-scrapper-app">
+            <!-- Contenu dynamique -->
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODALE RADIO ============ -->
+<div id="mod-radio" class="mod-overlay">
+    <div class="mod-container">
+        <div class="mod-header">
+            <h2 data-label="mod_radio_title">Radio</h2>
+            <button class="mod-close-btn" id="modRadioClose">×</button>
+        </div>
+        <div class="mod-content" id="mod-radio-app">
+            <!-- Contenu dynamique -->
+        </div>
+    </div>
+</div>
+
+<!-- ============ MENU CONTEXTUEL ============ -->
+<!-- Menu clic droit pour ajout rapide fichier/dossier -->
+<div id="context-menu" class="context-menu">
+  <button id="ctx-add-file">Ajouter à la playlist</button>
+  <button id="ctx-add-folder">Ajouter le contenu à la playlist</button>
+</div>
+
+<!-- ============ SCRIPTS ============ -->
+<!-- Chargement de l'API YouTube et application -->
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="frontend/js/pulse_logo.js"></script>
+<!-- Module ES : point d'entrée de l'application -->
+<script type="module" src="frontend/js/app.js"></script>
+</body>
+</html>

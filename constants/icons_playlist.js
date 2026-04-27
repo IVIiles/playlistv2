@@ -8,3 +8,5 @@ const ICONS_PLAYLIST = {
     ICON_WARNING: '⚠️',
     ICON_ERROR: '❌'
 };
+
+export { ICONS_PLAYLIST };

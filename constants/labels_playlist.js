@@ -124,3 +124,5 @@ const LABELS_PLAYLIST = {
     LABEL_RADIO_EXPAND: 'Développer',
     LABEL_RADIO_COLLAPSE: 'Réduire'
 };
+
+export { LABELS_PLAYLIST };

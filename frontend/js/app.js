@@ -388,14 +388,13 @@ class App {
      */
     async loadInitialState() {
         const params = new URLSearchParams(window.location.search);
-        this.currentPath = params.get('path') || '';
+        this.currentPath = params.get('csvPath') || '';
         this.selectedFile = params.get('file') || '';
-        const csvPath = params.get('csvPath') || '';
 
         await this.tree.init();
 
         if (this.selectedFile) {
-            await this.loadPlaylist(this.selectedFile, csvPath || this.currentPath);
+            await this.loadPlaylist(this.selectedFile, this.currentPath);
         }
     }
 

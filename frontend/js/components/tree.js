@@ -147,13 +147,10 @@ export class TreeComponent extends EventTarget {
     /**
      * Déplie ou replie un dossier selon son état.
      * @param {string} folder
-     * @param {string} path
+     * @param {string} path - Le chemin COMPLET du dossier (ex: "albums complets")
      */
     expandOrToggle(folder, path) {
-        const parts = path.split('/');
-        parts.pop();
-        const parentPath = parts.join('/');
-        const folderId = this.getFolderId(parentPath, folder);
+        const folderId = this.getFolderId(path, folder);
         const children = document.getElementById(folderId);
         if (!children) return;
 
@@ -161,7 +158,8 @@ export class TreeComponent extends EventTarget {
             this.toggleFolder(folderId);
             return;
         }
-        this.expandAndShowChildren(folder, path, parentPath);
+        // On charge les enfants avec le chemin complet du dossier
+        this.expandAndShowChildren(folder, path, path);
     }
 
     /**
@@ -185,8 +183,8 @@ export class TreeComponent extends EventTarget {
     /**
      * Charge et affiche les enfants d'un dossier.
      * @param {string} folder
-     * @param {string} path
-     * @param {string} parentPath
+     * @param {string} path - Chemin complet du dossier à scanner
+     * @param {string} parentPath - Chemin parent pour calculer l'ID du dossier
      */
     async expandAndShowChildren(folder, path, parentPath) {
         const folderId = this.getFolderId(parentPath, folder);
@@ -210,37 +208,37 @@ export class TreeComponent extends EventTarget {
 
     /**
      * Déploie séquentiellement l'arborescence jusqu'au chemin donné.
-     * @param {string} targetPath
+     * @param {string} targetPath - Chemin complet (ex: "albums complets/sous-dossier")
      * @returns {Promise<void>}
      */
     async expandToPath(targetPath) {
         if (!targetPath) return;
         const parts = targetPath.split('/');
-        let parentPath = '';
+        let currentPath = '';
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
-            const folderId = this.getFolderId(parentPath, part);
+            // Construire le chemin complet jusqu'à ce dossier
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            const folderId = this.getFolderId(currentPath, part);
             const children = document.getElementById(folderId);
             if (children && !children.classList.contains('expanded')) {
                 if (!children.innerHTML.trim()) {
-                    await this._expandFolderPart(part, parentPath);
+                    await this._expandFolderPart(part, currentPath);
                 }
                 children.classList.add('expanded');
                 const toggle = document.querySelector(`[data-toggle="${folderId}"]`);
                 if (toggle) toggle.textContent = ICONS_PLAYLIST.ICON_EXPAND;
             }
-            parentPath = parentPath ? `${parentPath}/${part}` : part;
         }
     }
 
     /**
      * Charge et injecte le contenu d'un dossier intermédiaire.
-     * @param {string} folder
-     * @param {string} parentPath
+     * @param {string} folder - Nom du dossier
+     * @param {string} currentPath - Chemin complet du dossier (ex: "albums complets")
      */
-    async _expandFolderPart(folder, parentPath) {
-        const currentPath = parentPath ? `${parentPath}/${folder}` : folder;
-        const folderId = this.getFolderId(parentPath, folder);
+    async _expandFolderPart(folder, currentPath) {
+        const folderId = this.getFolderId(currentPath, folder);
         const children = document.getElementById(folderId);
         if (!children) return;
         try {
@@ -262,6 +260,7 @@ export class TreeComponent extends EventTarget {
             if (!data || !data.success || !data.tree) {
                 throw new Error('Erreur scan récursif');
             }
+            // Le scan récursif part de la racine, donc parentPath initial est ''
             this.container.innerHTML = this.parseTreeToHTML(data.tree, '');
             document.querySelectorAll('.folder-children').forEach(el => el.classList.add('expanded'));
             document.querySelectorAll('.folder-toggle').forEach(el => el.textContent = ICONS_PLAYLIST.ICON_EXPAND);
@@ -281,16 +280,17 @@ export class TreeComponent extends EventTarget {
 
     /**
      * Convertit un objet tree (issu de fetchScanRecursive) en HTML.
-     * @param {Object} tree
-     * @param {string} parentPath
+     * @param {Object} tree - Objet arborescent avec folders{} et files[]
+     * @param {string} parentPath - Chemin complet du parent (ex: "albums complets")
      * @returns {string}
      */
     parseTreeToHTML(tree, parentPath) {
         let html = '';
         const folders = tree.folders ? Object.keys(tree.folders).sort() : [];
         folders.forEach(folder => {
-            const folderId = this.getFolderId(parentPath, folder);
+            // childPath est le chemin COMPLET de ce dossier
             const childPath = parentPath ? `${parentPath}/${folder}` : folder;
+            const folderId = this.getFolderId(childPath, folder);
             const children = tree.folders[folder];
             html += `<div class="folder-item" data-folder="${escapeHtml(folder)}" data-path="${escapeHtml(childPath)}">`;
             html += `<span class="folder-toggle" data-toggle="${folderId}">${ICONS_PLAYLIST.ICON_COLLAPSE}</span>`;

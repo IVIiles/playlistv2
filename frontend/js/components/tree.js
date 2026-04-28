@@ -79,7 +79,8 @@ export class TreeComponent extends EventTarget {
         files.forEach(file => {
             const fileName = file.replace('.csv', '');
             const isActive = file === this.selectedFile ? 'active' : '';
-            const fullPath = parentPath || '';
+            // Le chemin complet pour le fichier est le parentPath (dossier contenant le fichier)
+            const fullPath = parentPath;
             html += `<div class="file-item ${isActive}" data-file="${escapeHtml(file)}" data-path="${escapeHtml(fullPath)}">`;
             html += `<span class="file-icon">${ICONS_PLAYLIST.ICON_PLAYLIST}</span>`;
             html += `<span class="file-name">${escapeHtml(fileName)}</span>`;
@@ -306,7 +307,8 @@ export class TreeComponent extends EventTarget {
         files.forEach(file => {
             const fileName = file.replace('.csv', '');
             const isActive = file === this.selectedFile ? 'active' : '';
-            const fullPath = parentPath || '';
+            // Le chemin complet pour le fichier est le parentPath (dossier contenant le fichier)
+            const fullPath = parentPath;
             html += `<div class="file-item ${isActive}" data-file="${escapeHtml(file)}" data-path="${escapeHtml(fullPath)}">`;
             html += `<span class="file-icon">${ICONS_PLAYLIST.ICON_PLAYLIST}</span>`;
             html += `<span class="file-name">${escapeHtml(fileName)}</span>`;

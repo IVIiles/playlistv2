@@ -25,7 +25,8 @@ $response = ['success' => false, 'data' => []];
 function sanitizePath($path) {
     // Supprime les caractères dangereux et normalise
     $path = str_replace(['..', '\\'], ['', '/'], $path);
-    $path = preg_replace('/[^a-zA-Z0-9\/_-]/', '', $path);
+    // On autorise les espaces, lettres, chiffres, slash, tirets et underscores
+    $path = preg_replace('/[^a-zA-Z0-9\/_ -]/', '', $path);
     return trim($path, '/');
 }
 

@@ -95,6 +95,7 @@ export class TreeComponent extends EventTarget {
      * @returns {string}
      */
     getFolderId(folderPath) {
+        // Remplacer tous les caractères spéciaux par des underscores, mais garder la structure
         return 'folder_' + folderPath.replace(/[^a-zA-Z0-9]/g, '_');
     }
 

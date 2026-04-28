@@ -1,46 +1,51 @@
-```gitignore
-# Compiled and build artifacts
-*.pyc
+```
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Editors and IDEs
+.vscode/
+.idea/
+
+# Python
 __pycache__/
-*.o
-*.obj
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+coverage/
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.tox/
+.nox/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
 dist/
 build/
-*.class
+target/
+*.out
 *.exe
 *.dll
 *.so
 *.a
-*.out
+*.obj
 
-# Dependencies
-node_modules/
-venv/
-.venv/
-.env
-.env.local
-.env.*
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Editors
-.vscode/
-.idea/
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Compressed files
+# Compression files
 *.zip
 *.gz
 *.tar
@@ -64,62 +69,7 @@ htmlcov/
 *.tar.xz
 *.tar.zst
 
-# Python specific
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-.mypy_cache/
-.pytest_cache/
-.tox/
-.coverage.*
-
-# JavaScript/Node specific
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.jest/
-.nyc_output/
-
-# Java specific
-target/
-.gradle/
-*.jar
-*.war
-*.ear
-
-# C/C++ specific
-*.a
-*.lib
-*.obj
-*.o
-*.so
-*.dylib
-*.dll
-*.exe
-
-# Go specific
-*.exe
-*.test
-*.prof
-vendor/
-
-# Ruby specific
-*.gem
-*.rbc
-.bundle/
-vendor/bundle/
-vendor/cache/
-vendor/gems/
-vendor/ruby/
-
-# Rust specific
-target/
-Cargo.lock
-
-# Julia specific
-julia-*/
-
-# Zig specific
-zig*/
+# System files
+.DS_Store
+Thumbs.db
 ```

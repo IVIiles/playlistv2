@@ -238,7 +238,7 @@ try {
         $allFiles = [];
         
         // Fonction récursive pour trouver tous les CSV
-        $findCsvFiles = function($dir, $relPath) use (&$findCsvFiles, &$allFiles, $basePath) {
+        $findCsvFiles = function($relPath) use (&$findCsvFiles, &$allFiles, $basePath) {
             $result = scanDirectory($basePath, $relPath);
             
             foreach ($result['files'] as $file) {
@@ -249,25 +249,34 @@ try {
                 $fullPath .= $file;
                 
                 if (file_exists($fullPath)) {
+                    // Charger les métadonnées du premier vidéo du fichier
+                    $videos = loadPlaylistFromCSV($basePath, $file, $relPath);
+                    $firstVideo = !empty($videos) ? $videos[0] : null;
+                    
                     $allFiles[] = [
+                        'filename' => $file,
+                        'folderPath' => $relPath,
                         'file' => $file,
                         'path' => $relPath,
-                        'mtime' => filemtime($fullPath)
+                        'artist' => $firstVideo['artist'] ?? 'Inconnu',
+                        'album' => $firstVideo['album'] ?? 'Inconnu',
+                        'style' => '',
+                        'modified' => filemtime($fullPath)
                     ];
                 }
             }
             
             foreach ($result['folders'] as $folder) {
                 $newRelPath = $relPath ? $relPath . '/' . $folder : $folder;
-                $findCsvFiles($basePath, $newRelPath);
+                $findCsvFiles($newRelPath);
             }
         };
         
-        $findCsvFiles($basePath, '');
+        $findCsvFiles('');
         
         // Trier par date de modification décroissante
         usort($allFiles, function($a, $b) {
-            return $b['mtime'] - $a['mtime'];
+            return $b['modified'] - $a['modified'];
         });
         
         // Limiter le résultat
@@ -288,16 +297,25 @@ try {
             $response = [
                 'success' => true,
                 'query' => $query,
-                'results' => [],
+                'files' => [],
                 'message' => 'Termes de recherche trop courts (minimum 3 caractères)'
             ];
         } else {
             $searchFields = array_map('trim', explode(',', $fields));
-            $results = [];
+            $matchedFiles = [];
+            $seenFiles = [];
             
             // Fonction de recherche
-            $searchInFile = function($file, $path) use ($basePath, $query, $searchFields, &$results) {
+            $searchInFile = function($file, $path) use ($basePath, $query, $searchFields, &$matchedFiles, &$seenFiles) {
+                // Éviter les doublons
+                $fileKey = $path . '/' . $file;
+                if (isset($seenFiles[$fileKey])) {
+                    return;
+                }
+                $seenFiles[$fileKey] = true;
+                
                 $videos = loadPlaylistFromCSV($basePath, $file, $path);
+                $matchFound = false;
                 
                 foreach ($videos as $video) {
                     $match = false;
@@ -313,8 +331,23 @@ try {
                     }
                     
                     if ($match) {
-                        $results[] = $video;
+                        $matchFound = true;
+                        break;
                     }
+                }
+                
+                if ($matchFound) {
+                    // Charger les métadonnées du premier vidéo
+                    $firstVideo = !empty($videos) ? $videos[0] : null;
+                    $matchedFiles[] = [
+                        'filename' => $file,
+                        'folderPath' => $path,
+                        'file' => $file,
+                        'path' => $path,
+                        'artist' => $firstVideo['artist'] ?? 'Inconnu',
+                        'album' => $firstVideo['album'] ?? 'Inconnu',
+                        'style' => ''
+                    ];
                 }
             };
             
@@ -335,14 +368,14 @@ try {
             $scanAll('');
             
             // Limiter à 100 résultats
-            $results = array_slice($results, 0, 100);
+            $matchedFiles = array_slice($matchedFiles, 0, 100);
             
             $response = [
                 'success' => true,
                 'query' => $query,
                 'fields' => $searchFields,
-                'count' => count($results),
-                'results' => $results
+                'count' => count($matchedFiles),
+                'files' => $matchedFiles
             ];
         }
         

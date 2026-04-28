@@ -190,8 +190,13 @@ function extractVideoId($input) {
 // ============ TRAITEMENT DES ACTIONS ============
 
 try {
-    // Chemin de base : parent du dossier backend
-    $basePath = dirname(__DIR__);
+    // Chemin de base : dossier storage/playlists
+    $basePath = dirname(__DIR__) . '/storage/playlists';
+    
+    // Vérifier que le dossier existe, sinon le créer
+    if (!is_dir($basePath)) {
+        @mkdir($basePath, 0755, true);
+    }
     
     if ($action === 'scan') {
         // Scan d'un dossier - retourne folders[] et files[]

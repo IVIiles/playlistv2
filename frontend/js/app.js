@@ -42,12 +42,16 @@ function initLabels() {
     if (btnRechercher && LABELS_PLAYLIST.BTN_RECHERCHER) btnRechercher.textContent = LABELS_PLAYLIST.BTN_RECHERCHER;
     const btnScrapper = document.querySelector('[data-label="btn_scrapper"]');
     if (btnScrapper && LABELS_PLAYLIST.BTN_SCRAPPER) btnScrapper.textContent = LABELS_PLAYLIST.BTN_SCRAPPER;
+    const btnRadio = document.querySelector('[data-label="btn_radio"]');
+    if (btnRadio && LABELS_PLAYLIST.BTN_RADIO) btnRadio.textContent = LABELS_PLAYLIST.BTN_RADIO;
     const modNouveautesTitle = document.querySelector('[data-label="mod_nouveautes_title"]');
     if (modNouveautesTitle && LABELS_PLAYLIST.MOD_NOUVEAUTES_TITLE) modNouveautesTitle.textContent = LABELS_PLAYLIST.MOD_NOUVEAUTES_TITLE;
     const modRechercherTitle = document.querySelector('[data-label="mod_rechercher_title"]');
     if (modRechercherTitle && LABELS_PLAYLIST.MOD_RECHERCHER_TITLE) modRechercherTitle.textContent = LABELS_PLAYLIST.MOD_RECHERCHER_TITLE;
     const modScrapperTitle = document.querySelector('[data-label="mod_scrapper_title"]');
     if (modScrapperTitle && LABELS_PLAYLIST.MOD_SCRAPPER_TITLE) modScrapperTitle.textContent = LABELS_PLAYLIST.MOD_SCRAPPER_TITLE;
+    const modRadioTitle = document.querySelector('[data-label="mod_radio_title"]');
+    if (modRadioTitle && LABELS_PLAYLIST.MOD_RADIO_TITLE) modRadioTitle.textContent = LABELS_PLAYLIST.MOD_RADIO_TITLE;
     const searchPlaceholder = document.querySelector('[data-label="search_placeholder"]');
     if (searchPlaceholder && LABELS_PLAYLIST.LABEL_SEARCH_PLACEHOLDER) searchPlaceholder.placeholder = LABELS_PLAYLIST.LABEL_SEARCH_PLACEHOLDER;
     const optArtist = document.querySelector('[data-label="opt_artist"]');
@@ -65,6 +69,7 @@ function initLabels() {
         'btnNouveautes': LABELS_PLAYLIST.TOOLTIP_NOUVEAUTES,
         'btnRechercher': LABELS_PLAYLIST.TOOLTIP_RECHERCHER,
         'btnScrapper': LABELS_PLAYLIST.TOOLTIP_SCRAPPER,
+        'btnRadio': LABELS_PLAYLIST.TOOLTIP_RADIO,
         'expandAllBtn': LABELS_PLAYLIST.TOOLTIP_EXPAND_ALL,
         'collapseAllBtn': LABELS_PLAYLIST.TOOLTIP_COLLAPSE_ALL,
         'shuffleBtn': LABELS_PLAYLIST.TOOLTIP_SHUFFLE

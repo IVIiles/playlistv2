@@ -3,7 +3,6 @@
 // la recherche locale, le shuffle et les interactions utilisateur.
 
 import { escapeHtml, debounce } from '../utils.js';
-import { LABELS_PLAYLIST } from '../constants/labels_playlist.js';
 
 export class PlaylistUIComponent extends EventTarget {
     /**

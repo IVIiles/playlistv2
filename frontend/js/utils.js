@@ -38,12 +38,22 @@ export function buildApiUrl(action, params = {}, base = 'backend/api.php') {
 /**
  * Effectue une requête fetch et retourne la réponse JSON.
  * @param {string} url - URL cible
+ * @param {Object} [options={}] - Options fetch additionnelles
  * @returns {Promise<any>} Données JSON
  * @throws {Error} Si le réseau échoue ou si la réponse n'est pas OK
  */
-export async function fetchJson(url) {
+export async function fetchJson(url, options = {}) {
     try {
-        const response = await fetch(url);
+        // Ajouter le token CSRF aux headers si disponible
+        const csrfToken = window.csrfToken || '';
+        if (csrfToken) {
+            options.headers = {
+                ...options.headers,
+                'X-CSRF-Token': csrfToken
+            };
+        }
+        
+        const response = await fetch(url, options);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }

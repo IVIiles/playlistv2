@@ -1,4 +1,4 @@
-export const LABELS_PLAYLIST = {
+const LABELS_PLAYLIST = {
     // ============ TITRES ET TEXTES ============
     TITLE_PAGE: 'Playlist de Miles - Sélection',
     LABEL_ROOT: 'Accueil',

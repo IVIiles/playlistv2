@@ -5,6 +5,27 @@ import { buildApiUrl, fetchJson } from './utils.js';
 const API_BASE = 'backend/api.php';
 const SCRAPPER_BASE = 'backend/scrapper.php';
 
+// Token CSRF global
+let csrfToken = '';
+
+/**
+ * Initialise le token CSRF depuis le serveur.
+ * Doit être appelé au chargement de l'application.
+ */
+export async function initCsrfToken() {
+    try {
+        const response = await fetch('backend/generate_token.php');
+        const data = await response.json();
+        if (data.success && data.token) {
+            csrfToken = data.token;
+            window.csrfToken = data.token; // Rendre disponible globalement
+            console.log('Token CSRF initialisé');
+        }
+    } catch (e) {
+        console.error('Erreur initialisation token CSRF:', e);
+    }
+}
+
 export class ApiService {
     /**
      * Scan d'un dossier.

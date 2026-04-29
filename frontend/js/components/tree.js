@@ -3,7 +3,6 @@
 // la navigation, le clic droit, l'expansion / réduction.
 
 import { escapeHtml } from '../utils.js';
-import { ICONS_PLAYLIST } from '../constants/icons_playlist.js';
 
 export class TreeComponent extends EventTarget {
     /**
@@ -20,6 +19,7 @@ export class TreeComponent extends EventTarget {
         this.notify = services.notify;
         this.container = services.treeContainer;
         this.selectedFile = options.selectedFile || '';
+        this.treeListenersInitialized = false;
         this._contextMenuCloseHandler = null;
     }
 
@@ -65,9 +65,8 @@ export class TreeComponent extends EventTarget {
     buildFolderTreeHTML(folders, files, parentPath, depth) {
         let html = '';
         folders.forEach(folder => {
-            // childPath est le chemin COMPLET de ce dossier
+            const folderId = this.getFolderId(parentPath, folder);
             const childPath = parentPath ? `${parentPath}/${folder}` : folder;
-            const folderId = this.getFolderId(childPath);
             html += `<div class="folder-item" data-folder="${escapeHtml(folder)}" data-path="${escapeHtml(childPath)}">`;
             html += `<span class="folder-toggle" data-toggle="${folderId}">${ICONS_PLAYLIST.ICON_COLLAPSE}</span>`;
             html += `<span class="folder-icon">${ICONS_PLAYLIST.ICON_FOLDER}</span>`;
@@ -79,8 +78,7 @@ export class TreeComponent extends EventTarget {
         files.forEach(file => {
             const fileName = file.replace('.csv', '');
             const isActive = file === this.selectedFile ? 'active' : '';
-            // Le chemin complet pour le fichier est le parentPath (dossier contenant le fichier)
-            const fullPath = parentPath;
+            const fullPath = parentPath || '';
             html += `<div class="file-item ${isActive}" data-file="${escapeHtml(file)}" data-path="${escapeHtml(fullPath)}">`;
             html += `<span class="file-icon">${ICONS_PLAYLIST.ICON_PLAYLIST}</span>`;
             html += `<span class="file-name">${escapeHtml(fileName)}</span>`;
@@ -91,19 +89,20 @@ export class TreeComponent extends EventTarget {
 
     /**
      * Génère un identifiant unique pour un dossier.
-     * @param {string} folderPath - Chemin COMPLET du dossier
+     * @param {string} parentPath
+     * @param {string} folder
      * @returns {string}
      */
-    getFolderId(folderPath) {
-        // Remplacer tous les caractères spéciaux par des underscores, mais garder la structure
-        return 'folder_' + folderPath.replace(/[^a-zA-Z0-9]/g, '_');
+    getFolderId(parentPath, folder) {
+        const path = parentPath ? `${parentPath}_${folder}` : folder;
+        return 'folder_' + path.replace(/[^a-zA-Z0-9]/g, '_');
     }
 
     /**
      * Initialise la délégation d'événements sur le conteneur de l'arborescence.
      */
     initTreeListeners() {
-        if (!this.container) return;
+        if (!this.container || this.treeListenersInitialized) return;
 
         this.container.addEventListener('click', (e) => {
             const folderItem = e.target.closest('.folder-item');
@@ -139,15 +138,20 @@ export class TreeComponent extends EventTarget {
                 await this._handleFolderContextMenu(e, folder, path);
             }
         });
+
+        this.treeListenersInitialized = true;
     }
 
     /**
      * Déplie ou replie un dossier selon son état.
      * @param {string} folder
-     * @param {string} path - Le chemin COMPLET du dossier (ex: "albums complets")
+     * @param {string} path
      */
     expandOrToggle(folder, path) {
-        const folderId = this.getFolderId(path);
+        const parts = path.split('/');
+        parts.pop();
+        const parentPath = parts.join('/');
+        const folderId = this.getFolderId(parentPath, folder);
         const children = document.getElementById(folderId);
         if (!children) return;
 
@@ -155,8 +159,7 @@ export class TreeComponent extends EventTarget {
             this.toggleFolder(folderId);
             return;
         }
-        // On charge les enfants avec le chemin complet du dossier
-        this.expandAndShowChildren(folder, path, path);
+        this.expandAndShowChildren(folder, path, parentPath);
     }
 
     /**
@@ -180,11 +183,11 @@ export class TreeComponent extends EventTarget {
     /**
      * Charge et affiche les enfants d'un dossier.
      * @param {string} folder
-     * @param {string} path - Chemin complet du dossier à scanner
-     * @param {string} parentPath - Chemin parent pour calculer l'ID du dossier
+     * @param {string} path
+     * @param {string} parentPath
      */
     async expandAndShowChildren(folder, path, parentPath) {
-        const folderId = this.getFolderId(path);
+        const folderId = this.getFolderId(parentPath, folder);
         const children = document.getElementById(folderId);
         if (!children) return;
 
@@ -205,37 +208,37 @@ export class TreeComponent extends EventTarget {
 
     /**
      * Déploie séquentiellement l'arborescence jusqu'au chemin donné.
-     * @param {string} targetPath - Chemin complet (ex: "albums complets/sous-dossier")
+     * @param {string} targetPath
      * @returns {Promise<void>}
      */
     async expandToPath(targetPath) {
         if (!targetPath) return;
         const parts = targetPath.split('/');
-        let currentPath = '';
+        let parentPath = '';
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
-            // Construire le chemin complet jusqu'à ce dossier
-            currentPath = currentPath ? `${currentPath}/${part}` : part;
-            const folderId = this.getFolderId(currentPath);
+            const folderId = this.getFolderId(parentPath, part);
             const children = document.getElementById(folderId);
             if (children && !children.classList.contains('expanded')) {
                 if (!children.innerHTML.trim()) {
-                    await this._expandFolderPart(part, currentPath);
+                    await this._expandFolderPart(part, parentPath);
                 }
                 children.classList.add('expanded');
                 const toggle = document.querySelector(`[data-toggle="${folderId}"]`);
                 if (toggle) toggle.textContent = ICONS_PLAYLIST.ICON_EXPAND;
             }
+            parentPath = parentPath ? `${parentPath}/${part}` : part;
         }
     }
 
     /**
      * Charge et injecte le contenu d'un dossier intermédiaire.
-     * @param {string} folder - Nom du dossier
-     * @param {string} currentPath - Chemin complet du dossier (ex: "albums complets")
+     * @param {string} folder
+     * @param {string} parentPath
      */
-    async _expandFolderPart(folder, currentPath) {
-        const folderId = this.getFolderId(currentPath);
+    async _expandFolderPart(folder, parentPath) {
+        const currentPath = parentPath ? `${parentPath}/${folder}` : folder;
+        const folderId = this.getFolderId(parentPath, folder);
         const children = document.getElementById(folderId);
         if (!children) return;
         try {
@@ -257,7 +260,6 @@ export class TreeComponent extends EventTarget {
             if (!data || !data.success || !data.tree) {
                 throw new Error('Erreur scan récursif');
             }
-            // Le scan récursif part de la racine, donc parentPath initial est ''
             this.container.innerHTML = this.parseTreeToHTML(data.tree, '');
             document.querySelectorAll('.folder-children').forEach(el => el.classList.add('expanded'));
             document.querySelectorAll('.folder-toggle').forEach(el => el.textContent = ICONS_PLAYLIST.ICON_EXPAND);
@@ -277,17 +279,16 @@ export class TreeComponent extends EventTarget {
 
     /**
      * Convertit un objet tree (issu de fetchScanRecursive) en HTML.
-     * @param {Object} tree - Objet arborescent avec folders{} et files[]
-     * @param {string} parentPath - Chemin complet du parent (ex: "albums complets")
+     * @param {Object} tree
+     * @param {string} parentPath
      * @returns {string}
      */
     parseTreeToHTML(tree, parentPath) {
         let html = '';
         const folders = tree.folders ? Object.keys(tree.folders).sort() : [];
         folders.forEach(folder => {
-            // childPath est le chemin COMPLET de ce dossier
+            const folderId = this.getFolderId(parentPath, folder);
             const childPath = parentPath ? `${parentPath}/${folder}` : folder;
-            const folderId = this.getFolderId(childPath);
             const children = tree.folders[folder];
             html += `<div class="folder-item" data-folder="${escapeHtml(folder)}" data-path="${escapeHtml(childPath)}">`;
             html += `<span class="folder-toggle" data-toggle="${folderId}">${ICONS_PLAYLIST.ICON_COLLAPSE}</span>`;
@@ -304,8 +305,7 @@ export class TreeComponent extends EventTarget {
         files.forEach(file => {
             const fileName = file.replace('.csv', '');
             const isActive = file === this.selectedFile ? 'active' : '';
-            // Le chemin complet pour le fichier est le parentPath (dossier contenant le fichier)
-            const fullPath = parentPath;
+            const fullPath = parentPath || '';
             html += `<div class="file-item ${isActive}" data-file="${escapeHtml(file)}" data-path="${escapeHtml(fullPath)}">`;
             html += `<span class="file-icon">${ICONS_PLAYLIST.ICON_PLAYLIST}</span>`;
             html += `<span class="file-name">${escapeHtml(fileName)}</span>`;

@@ -115,27 +115,28 @@ export class Playlist extends EventTarget {
         return this.index;
     }
 
-    /**
-     * Active ou désactive le mode aléatoire.
-     * @param {boolean} enable
-     */
-    toggleShuffle(enable = !this.isShuffled) {
-        if (enable) {
-            // Mélange de la liste current
-            for (let i = this.current.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [this.current[i], this.current[j]] = [this.current[j], this.current[i]];
-            }
-            this.isShuffled = true;
-        } else {
-            // Rétablissement de l'ordre original
-            this.current = [...this.original];
-            this.isShuffled = false;
-        }
-        // Ré-appliquer le filtre éventuel
-        this._notify('change');
-        this._notify('filterChange');
+  /**
+   * Active ou désactive le mode aléatoire.
+   * @param {boolean} enable
+   */
+  toggleShuffle(enable = !this.isShuffled) {
+    if (enable) {
+      // Mélange de la liste current
+      for (let i = this.current.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.current[i], this.current[j]] = [this.current[j], this.current[i]];
+      }
+      this.isShuffled = true;
+    } else {
+      // Rétablissement de l'ordre original
+      this.current = [...this.original];
+      this.isShuffled = false;
     }
+    // Synchroniser filtered avec current (même ordre pour l'affichage)
+    this.filtered = [...this.current];
+    this._notify('change');
+    this._notify('filterChange');
+  }
 
     /**
      * Filtre la liste "filtered" en fonction d'un texte de recherche.

@@ -1,14 +1,14 @@
 /* ============================================
-   FORMAT DESCRIPTIF - Trigger → Input → Action → Result
-   =====================
-   - Trigger : auto (200ms)
-   - Input   : playBtn, backBtn, player
-   - Action  : Vérifie la présence d'une iframe ET l'état "pause" du bouton
-   - Result  : Active/Désactive l'animation pulse sur le bouton retour
-   ============================================ */
+FORMAT DESCRIPTIF - Trigger → Input → Action → Result
+=====================
+- Trigger : Événements du player YouTube (play/pause)
+- Input : playBtn, backBtn, player
+- Action : Écoute les changements d'état du player
+- Result : Active/Désactive l'animation pulse sur le bouton retour
+============================================ */
 
 (function() {
-    // --- PARTIE CSS (Inchangée selon vos instructions) ---
+    // --- PARTIE CSS (Inchangée) ---
     const style = document.createElement('style');
     style.textContent = `
         @keyframes dance-pulse {
@@ -19,34 +19,117 @@
             100% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 rgba(0, 234, 255, 0.7); }
         }
         #playlist-app .header-back-btn.pulse-active {
-            animation: dance-pulse 2s ease-in-out infinite;  //0,8 a la base
+            animation: dance-pulse 2s ease-in-out infinite;
         }
     `;
     document.head.appendChild(style);
 
-    // --- LOGIQUE D'ANIMATION ---
+    // --- LOGIQUE D'ANIMATION EVENT-BASED ---
     
-    // On cherche les éléments une seule fois (si possible) ou on les valide proprement
-    setInterval(() => {
-        const playBtn = document.querySelector('.play-pause-btn');
-        const backBtn = document.getElementById('headerBackBtn');
-        const player = document.getElementById('youtubePlayer');
-
-        if (!playBtn || !backBtn || !player) return;
-
-        // 1. Logique simplifiée pour la présence d'une vidéo
+    let isPulsing = false;
+    let pulseAnimationId = null;
+    
+    function getElements() {
+        return {
+            playBtn: document.querySelector('.play-pause-btn'),
+            backBtn: document.getElementById('headerBackBtn'),
+            player: document.getElementById('youtubePlayer')
+        };
+    }
+    
+    function startPulse() {
+        const { backBtn } = getElements();
+        if (!backBtn || isPulsing) return;
+        
+        isPulsing = true;
+        backBtn.classList.add('pulse-active');
+        
+        // Animation avec requestAnimationFrame au lieu de setInterval
+        const animate = () => {
+            if (!isPulsing) return;
+            pulseAnimationId = requestAnimationFrame(animate);
+        };
+        pulseAnimationId = requestAnimationFrame(animate);
+    }
+    
+    function stopPulse() {
+        const { backBtn } = getElements();
+        if (!backBtn) return;
+        
+        isPulsing = false;
+        backBtn.classList.remove('pulse-active');
+        
+        if (pulseAnimationId) {
+            cancelAnimationFrame(pulseAnimationId);
+            pulseAnimationId = null;
+        }
+    }
+    
+    function updatePulseState() {
+        const { playBtn, player } = getElements();
+        
+        if (!playBtn || !player) {
+            stopPulse();
+            return;
+        }
+        
+        // Vérifier présence vidéo
         const hasVideo = player.tagName === 'IFRAME' || player.querySelector('iframe');
         
-        // 2. Logique pour l'état de lecture
-        // Note : On utilise .includes pour éviter les problèmes d'espaces invisibles
+        // Vérifier état lecture
         const isPlaying = playBtn.textContent.includes('⏸');
-
-        // 3. Application du résultat : On ajoute la classe seulement si (Vidéo Présente) ET (En lecture)
+        
         if (hasVideo && isPlaying) {
-            backBtn.classList.add('pulse-active');
+            startPulse();
         } else {
-            // Si la vidéo est en pause OU que l'iframe a disparu, on retire l'animation
-            backBtn.classList.remove('pulse-active');
+            stopPulse();
         }
-    }, 1000); //200
+    }
+    
+    // --- OBSERVATION DES CHANGEMENTS ---
+    
+    // Observer les changements du bouton play/pause
+    function observePlayButton() {
+        const { playBtn } = getElements();
+        if (!playBtn) return;
+        
+        const observer = new MutationObserver(() => {
+            updatePulseState();
+        });
+        
+        observer.observe(playBtn, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+        
+        // Observer aussi le player pour les changements d'iframe
+        const { player } = getElements();
+        if (player) {
+            const playerObserver = new MutationObserver(() => {
+                updatePulseState();
+            });
+            playerObserver.observe(player, {
+                childList: true,
+                subtree: true
+            });
+        }
+    }
+    
+    // --- INITIALISATION ---
+    
+    // Attendre que le DOM soit prêt
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePulseState();
+            observePlayButton();
+        });
+    } else {
+        updatePulseState();
+        observePlayButton();
+    }
+    
+    // Mettre à jour périodiquement mais moins fréquemment (3s au lieu de 1s)
+    // C'est une solution de secours, l'observer Mutation devrait suffire
+    setInterval(updatePulseState, 3000);
 })();

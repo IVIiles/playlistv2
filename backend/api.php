@@ -1,478 +1,742 @@
 <?php
-/**
- * API Backend - Playlist Mnemo
- * Gestion des playlists avec arborescence de dossiers
- */
 
-// ============ CONFIGURATION ============
-error_reporting(E_ALL);
-ini_set('display_errors', 0); // Ne pas afficher les erreurs dans la réponse JSON
-header('Content-Type: application/json; charset=utf-8');
+declare(strict_types=1);
 
-// Récupération et validation de l'action
-$action = $_GET['action'] ?? '';
+// ============ HEADERS CORS SÉCURISÉS (AVANT TOUT) ============
+// ⚠️ Aucun espace ou ligne vide avant <?php
+// ⚠️ Aucun echo/print avant ces headers
 
-// Réponse par défaut
-$response = ['success' => false, 'data' => []];
+header('Content-Type: application/json');
 
-// ============ FONCTIONS UTILITAIRES ============
+$allowedOrigins = [
+    'https://milescorp.great-site.net',
+    'http://localhost',
+    'http://127.0.0.1'
+];
 
-/**
- * Sécurise un chemin pour éviter les attaques par traversal
- * @param string $path Chemin à sécuriser
- * @return string Chemin nettoyé
- */
-function sanitizePath($path) {
-    // Supprime les caractères dangereux et normalise
-    $path = str_replace(['..', '\\'], ['', '/'], $path);
-    // On autorise les espaces, lettres, chiffres, slash, tirets et underscores
-    $path = preg_replace('/[^a-zA-Z0-9\/_ -]/', '', $path);
-    return trim($path, '/');
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+// Si HTTP_ORIGIN est vide, vérifier HTTP_HOST ou REFERER
+if (empty($origin)) {
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    
+    // Essayer de reconstruire l'origine depuis le host
+    if (!empty($host)) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $origin = $scheme . '://' . $host;
+    } elseif (!empty($referer)) {
+        // Extraire l'origine depuis le referer
+        $originParts = parse_url($referer);
+        if ($originParts && isset($originParts['scheme']) && isset($originParts['host'])) {
+            $origin = $originParts['scheme'] . '://' . $originParts['host'];
+            if (isset($originParts['port'])) {
+                $origin .= ':' . $originParts['port'];
+            }
+        }
+    }
 }
 
-/**
- * Scanne un dossier et retourne fichiers CSV et sous-dossiers
- * @param string $basePath Chemin de base (racine du projet)
- * @param string $relativePath Chemin relatif à explorer
- * @return array ['folders' => [], 'files' => []]
- */
-function scanDirectory($basePath, $relativePath = '') {
-    $result = ['folders' => [], 'files' => []];
-    
-    // Dossiers à exclure
-    $exclude = ['vendor', 'node_modules', '.git', 'backend', 'frontend', 'assets', '__pycache__'];
-    
-    // Construire le chemin absolu
-    $targetPath = $relativePath 
-        ? rtrim($basePath, '/') . '/' . sanitizePath($relativePath)
-        : rtrim($basePath, '/');
-    
-    if (!is_dir($targetPath)) {
-        return $result;
+// Vérifier si l'origine est autorisée
+$isAllowed = false;
+foreach ($allowedOrigins as $allowed) {
+    if (strpos($origin, $allowed) === 0 || $origin === $allowed) {
+        $isAllowed = true;
+        break;
+    }
+}
+
+// En production, on peut aussi accepter les requêtes sans origine (same-origin)
+if (!$isAllowed && !empty($origin)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Origine non autorisée: ' . $origin]);
+    exit;
+}
+
+// Si pas d'origine détectée mais pas en production stricte, on continue
+if (empty($origin)) {
+    $origin = $allowedOrigins[0]; // Utiliser la première origine par défaut
+}
+
+header('Access-Control-Allow-Origin: ' . $origin);
+header('Access-Control-Allow-Methods: GET');
+header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
+
+// ============ CSRF PROTECTION ============
+session_start();
+
+function validateCsrfToken(): bool
+{
+    // Les requêtes GET sont exemptées (lecture seule)
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        return true;
     }
     
-    $items = @scandir($targetPath);
-    if ($items === false) {
-        return $result;
+    // Pour les autres méthodes, vérifier le token
+    $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    $sessionToken = $_SESSION['csrf_token'] ?? '';
+    
+    if (empty($sessionToken) || empty($headerToken)) {
+        return false;
     }
     
+    return hash_equals($sessionToken, $headerToken);
+}
+
+// Vérification du token CSRF pour les méthodes modifiantes
+if (!validateCsrfToken()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Token CSRF invalide ou manquant']);
+    exit;
+}
+
+// ============ CONFIGURATION ============
+// Configuration centralisée - SSOT
+
+class Config
+{
+    public const DIR_PLAYLISTS = __DIR__ . '/../storage/playlists/';
+    public const EXT_CSV = 'csv';
+    public const FILE_CURRENT = '.';
+    public const FILE_PARENT = '..';
+    public const PARAM_PATH = 'path';
+    public const PARAM_ACTION = 'action';
+    public const PARAM_FILE = 'file';
+    public const PARAM_DEPTH = 'depth';
+    public const DEFAULT_DEPTH = 4;
+    public const MSG_ERROR_DIR = 'Erreur: Dossier inaccessible.';
+    public const MSG_ERROR_PLAYLIST = 'Erreur: Playlist non autorisée.';
+    public const MSG_ERROR_READ = 'Erreur: Impossible de lire le fichier.';
+    public const MSG_ERROR_DATA = 'Erreur: Aucune donnée valide trouvée.';
+    public const MSG_ERROR_ACTION = 'Erreur: Action non reconnue.';
+}
+
+// ============ PATH SANITIZER ============
+// Gestionnaire de sécurité pour les chemins
+
+class PathSanitizer
+{
+    // Nettoie un chemin utilisateur
+    public static function clean(string $path): string
+    {
+        $path = trim($path, '/');
+        $parts = $path ? explode('/', $path) : [];
+        $cleanParts = [];
+
+        foreach ($parts as $part) {
+            $cleanPart = basename($part);
+            if ($cleanPart && $cleanPart !== Config::FILE_CURRENT
+                && $cleanPart !== Config::FILE_PARENT) {
+                $cleanParts[] = $cleanPart;
+            }
+        }
+
+        return implode('/', $cleanParts);
+    }
+
+    // Retourne un chemin sécurisé
+    public static function getSafeDir(string $baseDir, string $userPath): string
+    {
+        $target = $baseDir . $userPath;
+        if ($userPath !== '' && (!is_dir($target)
+            || realpath($target) === false)) {
+            return $baseDir;
+        }
+        return $userPath !== '' ? $target . '/' : $target;
+    }
+
+    // Vérifie qu'un fichier est dans le répertoire autorisé
+    public static function isFileAllowed(
+        string $baseDir,
+        string $relativePath,
+        string $filename
+    ): bool {
+        $safeDir = self::getSafeDir($baseDir, $relativePath);
+        $filePath = $safeDir . basename($filename);
+        $realPath = realpath($filePath);
+        $realBaseDir = realpath($safeDir);
+
+        return $realPath !== false
+            && $realBaseDir !== false
+            && strpos($realPath, $realBaseDir) === 0;
+    }
+}
+
+// ============ PLAYLIST MANAGER ============
+// Gestionnaire de données Playlist
+
+class PlaylistManager
+{
+    private string $currentDir;
+    private string $relativeCurrentPath;
+
+    public function __construct(string $relativeCurrentPath)
+    {
+        $this->relativeCurrentPath = $relativeCurrentPath;
+        $this->currentDir = PathSanitizer::getSafeDir(
+            Config::DIR_PLAYLISTS,
+            $relativeCurrentPath
+        );
+
+        if (realpath($this->currentDir) === realpath(Config::DIR_PLAYLISTS)
+            && $relativeCurrentPath !== '') {
+            $this->relativeCurrentPath = '';
+        }
+    }
+
+    // Retourne les breadcrumbs
+    public function getBreadcrumbs(): array
+    {
+        $breadcrumbs = [];
+        $parts = $this->relativeCurrentPath
+            ? explode('/', $this->relativeCurrentPath)
+            : [];
+        $accumulated = '';
+
+        foreach ($parts as $part) {
+            $accumulated .= ($accumulated ? '/' : '') . $part;
+            $breadcrumbs[] = ['name' => $part, 'path' => $accumulated];
+        }
+        return $breadcrumbs;
+    }
+
+    // Scan le répertoire courant
+    public function scanDirectory(): array
+    {
+        $folders = [];
+        $files = [];
+
+        if (is_dir($this->currentDir)) {
+            $items = scandir($this->currentDir) ?: [];
+            foreach ($items as $item) {
+                if ($item === Config::FILE_CURRENT
+                    || $item === Config::FILE_PARENT) {
+                    continue;
+                }
+
+                $fullPath = $this->currentDir . $item;
+                if (is_dir($fullPath)) {
+                    $folders[] = $item;
+                } elseif (pathinfo($item, PATHINFO_EXTENSION)
+                    === Config::EXT_CSV) {
+                    $files[] = $item;
+                }
+            }
+        }
+        sort($folders);
+        sort($files);
+
+        return ['folders' => $folders, 'files' => $files];
+    }
+
+    // Charge les données CSV
+    public function loadCsvData(string $filename, array $allowedFiles): array
+    {
+    if (!in_array($filename, $allowedFiles, true)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => Config::MSG_ERROR_PLAYLIST, 'errorCode' => 'NOT_IN_ALLOWED_LIST']);
+        exit;
+    }
+
+    if (!PathSanitizer::isFileAllowed(
+        Config::DIR_PLAYLISTS,
+        $this->relativeCurrentPath,
+        $filename
+    )) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => Config::MSG_ERROR_PLAYLIST, 'errorCode' => 'PATH_TRAVERSAL_DETECTED']);
+        exit;
+    }
+
+    $filePath = $this->currentDir . $filename;
+    if (!file_exists($filePath)) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => Config::MSG_ERROR_READ, 'errorCode' => 'FILE_NOT_FOUND']);
+        exit;
+    }
+
+    $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => Config::MSG_ERROR_READ, 'errorCode' => 'FILE_READ_ERROR']);
+        exit;
+    }
+
+    array_shift($lines);
+
+    $videos = [];
+    foreach ($lines as $line) {
+        $row = str_getcsv($line);
+        if (count($row) < 4) {
+            continue;
+        }
+
+        $id = trim($row[0]);
+        if (empty($id) || strtolower($id) === 'id') {
+            continue;
+        }
+
+        $videos[] = [
+            'id' => $id,
+            'title' => trim($row[1]),
+            'artist' => trim($row[2]),
+            'song_title' => trim($row[3]),
+            'album' => (count($row) >= 5) ? trim($row[4]) : 'Inconnu'
+        ];
+    }
+
+    if (empty($videos)) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => Config::MSG_ERROR_DATA, 'errorCode' => 'EMPTY_DATA']);
+        exit;
+    }
+
+    return $videos;
+    }
+
+    public function getCurrentPath(): string
+    {
+        return $this->relativeCurrentPath;
+    }
+}
+
+// ============ ROUTEUR ============
+// Gestion des requêtes API
+
+function handleScan(): void
+{
+    $inputPath = isset($_GET[Config::PARAM_PATH])
+        ? (string)$_GET[Config::PARAM_PATH]
+        : '';
+    $cleanPath = PathSanitizer::clean($inputPath);
+    $manager = new PlaylistManager($cleanPath);
+
+    $scanResult = $manager->scanDirectory();
+    $breadcrumbs = $manager->getBreadcrumbs();
+
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'currentPath' => $manager->getCurrentPath(),
+        'breadcrumbs' => $breadcrumbs,
+        'folders' => $scanResult['folders'],
+        'files' => $scanResult['files']
+    ]);
+}
+
+// ============ SCAN RECURSIVE ============
+// Retourne la structure complète des dossiers en une requête
+
+function handleScanRecursive(): void
+{
+    $inputDepth = isset($_GET[Config::PARAM_DEPTH])
+        ? (int)$_GET[Config::PARAM_DEPTH]
+        : Config::DEFAULT_DEPTH;
+
+    $depth = max(1, min($inputDepth, Config::DEFAULT_DEPTH));
+
+    $tree = buildDirectoryTree(Config::DIR_PLAYLISTS, '', $depth);
+
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'tree' => $tree
+    ]);
+}
+
+// Construit l'arbre récursivement jusqu'à profondeur N
+function buildDirectoryTree(string $baseDir, string $relativePath, int $depth): array
+{
+    $tree = [
+        'folders' => [],
+        'files' => []
+    ];
+
+    $fullPath = $baseDir . ($relativePath ? $relativePath . '/' : '');
+
+    if (!is_dir($fullPath)) {
+        return $tree;
+    }
+
+    $items = scandir($fullPath) ?: [];
+
     foreach ($items as $item) {
-        // Ignorer les entrées spéciales
         if ($item === '.' || $item === '..') {
             continue;
         }
-        
-        // Ignorer les dossiers exclus
-        if (in_array($item, $exclude)) {
-            continue;
-        }
-        
-        $fullPath = $targetPath . '/' . $item;
-        
-        if (is_dir($fullPath)) {
-            $result['folders'][] = $item;
-        } elseif (is_file($fullPath) && strtolower(pathinfo($item, PATHINFO_EXTENSION)) === 'csv') {
-            $result['files'][] = $item;
+
+        $itemPath = $fullPath . $item;
+
+        if (is_dir($itemPath)) {
+            if ($depth > 1) {
+                $childRelativePath = $relativePath ? $relativePath . '/' . $item : $item;
+                $tree['folders'][$item] = buildDirectoryTree($baseDir, $childRelativePath, $depth - 1);
+            } else {
+                $tree['folders'][$item] = ['folders' => [], 'files' => []];
+            }
+        } elseif (pathinfo($item, PATHINFO_EXTENSION) === Config::EXT_CSV) {
+            $tree['files'][] = $item;
         }
     }
-    
-    // Trier alphabétiquement
-    sort($result['folders']);
-    sort($result['files']);
-    
-    return $result;
+
+    ksort($tree['folders']);
+    sort($tree['files']);
+    return $tree;
 }
 
-/**
- * Charge et parse un fichier CSV
- * @param string $basePath Chemin de base
- * @param string $file Nom du fichier CSV
- * @param string $relativePath Chemin relatif du dossier
- * @return array Données vidéos
- */
-function loadPlaylistFromCSV($basePath, $file, $relativePath) {
+function handlePlaylist(): void
+{
+    $inputPath = isset($_GET[Config::PARAM_PATH])
+        ? (string)$_GET[Config::PARAM_PATH]
+        : '';
+    $inputFile = isset($_GET[Config::PARAM_FILE])
+        ? basename((string)$_GET[Config::PARAM_FILE])
+        : '';
+
+    $cleanPath = PathSanitizer::clean($inputPath);
+    $manager = new PlaylistManager($cleanPath);
+    $scanResult = $manager->scanDirectory();
+
     $videos = [];
-    
-    // Construire le chemin complet
-    $filePath = rtrim($basePath, '/') . '/' . sanitizePath($relativePath);
-    if ($filePath !== '') {
-        $filePath .= '/';
+    if ($inputFile !== '') {
+        $videos = $manager->loadCsvData($inputFile, $scanResult['files']);
     }
-    $filePath .= basename($file);
+
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'currentPath' => $manager->getCurrentPath(),
+        'selectedFile' => $inputFile,
+        'videos' => $videos,
+        'hasVideos' => !empty($videos)
+    ]);
+}
+
+// ============ RECENT ============
+// Retourne les 20 derniers fichiers CSV modifiés
+
+function handleRecent(): void {
+    $files = [];
     
-    if (!file_exists($filePath)) {
-        return $videos;
-    }
-    
-    $handle = fopen($filePath, 'r');
-    if ($handle === false) {
-        return $videos;
-    }
-    
-    // Lire l'en-tête
-    $header = fgetcsv($handle);
-    if ($header === false) {
-        fclose($handle);
-        return $videos;
-    }
-    
-    // Mapper les colonnes
-    $columnMap = [];
-    foreach ($header as $index => $colName) {
-        $colNameLower = strtolower(trim($colName));
-        if (strpos($colNameLower, 'youtube') !== false || strpos($colNameLower, 'video') !== false) {
-            $columnMap['video_id'] = $index;
-        } elseif (strpos($colNameLower, 'artist') !== false || strpos($colNameLower, 'interprète') !== false) {
-            $columnMap['artist'] = $index;
-        } elseif (strpos($colNameLower, 'title') !== false || strpos($colNameLower, 'song') !== false || strpos($colNameLower, 'titre') !== false) {
-            $columnMap['title'] = $index;
-        } elseif (strpos($colNameLower, 'album') !== false) {
-            $columnMap['album'] = $index;
-        }
-    }
-    
-    // Lire les données
-    while (($row = fgetcsv($handle)) !== false) {
-        $video = [
-            'id' => isset($columnMap['video_id']) && isset($row[$columnMap['video_id']]) 
-                ? extractVideoId($row[$columnMap['video_id']]) 
-                : '',
-            'artist' => isset($columnMap['artist']) && isset($row[$columnMap['artist']]) 
-                ? trim($row[$columnMap['artist']]) 
-                : '',
-            'song_title' => isset($columnMap['title']) && isset($row[$columnMap['title']]) 
-                ? trim($row[$columnMap['title']]) 
-                : '',
-            'album' => isset($columnMap['album']) && isset($row[$columnMap['album']]) 
-                ? trim($row[$columnMap['album']]) 
-                : pathinfo($file, PATHINFO_FILENAME),
-            'sourceFile' => $file,
-            'sourcePath' => $relativePath
-        ];
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator(Config::DIR_PLAYLISTS, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
         
-        if (!empty($video['id'])) {
-            $videos[] = $video;
+        foreach ($iterator as $file) {
+            if ($file->isFile() && strtolower($file->getExtension()) === 'csv') {
+                $relativePath = str_replace(Config::DIR_PLAYLISTS, '', $file->getPathname());
+                $relativePath = ltrim($relativePath, '/');
+                $files[] = [
+                    'path' => $relativePath,
+                    'filename' => $file->getFilename(),
+                    'modified' => $file->getMTime()
+                ];
+            }
+        }
+    } catch (Exception $e) {
+        error_log('handleRecent error: ' . $e->getMessage());
+    }
+    
+    usort($files, fn($a, $b) => $b['modified'] - $a['modified']);
+    $top20 = array_slice($files, 0, 20);
+    
+    foreach ($top20 as &$file) {
+        $parts = explode('/', trim($file['path'], '/'));
+        $file['style'] = $parts[1] ?? '';
+        
+        $file['folderPath'] = implode('/', array_slice($parts, 0, -1));
+        
+        $csvPath = Config::DIR_PLAYLISTS . $file['path'];
+        $file['artist'] = '';
+        $file['album'] = '';
+        
+        if (file_exists($csvPath)) {
+            try {
+                $handle = fopen($csvPath, 'r');
+                if ($handle !== false) {
+                    $headers = fgetcsv($handle);
+                    $firstRow = fgetcsv($handle);
+                    fclose($handle);
+                    
+if ($firstRow && count($firstRow) >= 4) {
+$file['artist'] = trim($firstRow[2] ?? '');
+$file['album'] = (count($firstRow) >= 5) ? trim($firstRow[4]) : 'Inconnu';
+}
+                }
+            } catch (Exception $e) {
+                error_log('handleRecent fopen error: ' . $e->getMessage());
+            }
         }
     }
     
-    fclose($handle);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'files' => $top20]);
+}
+
+// ============ SEARCH ============
+// Recherche dans les fichiers CSV
+
+function handleSearch(): void {
+    $query = isset($_GET['q']) ? strtolower(trim($_GET['q'])) : '';
+    $fields = isset($_GET['fields']) ? explode(',', $_GET['fields']) : ['artist'];
+    
+    if (empty($query)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'files' => []]);
+        return;
+    }
+    
+    $results = [];
+    $queryLower = strtolower($query);
+    
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator(Config::DIR_PLAYLISTS, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        
+        foreach ($iterator as $file) {
+            if ($file->isFile() && strtolower($file->getExtension()) === 'csv') {
+                $relativePath = str_replace(Config::DIR_PLAYLISTS, '', $file->getPathname());
+                $relativePath = ltrim($relativePath, '/');
+                $filename = $file->getFilename();
+                $filenameNoExt = pathinfo($filename, PATHINFO_FILENAME);
+                
+                $parts = explode('/', trim($relativePath, '/'));
+                $folderPath = implode('/', array_slice($parts, 0, -1));
+                
+                $match = false;
+                
+                foreach ($fields as $field) {
+                    $field = trim($field);
+                    
+                    if ($field === 'artist') {
+                        $csvPath = Config::DIR_PLAYLISTS . $relativePath;
+                        if (file_exists($csvPath)) {
+                            try {
+                                $handle = fopen($csvPath, 'r');
+                                if ($handle !== false) {
+                                    fgetcsv($handle);
+                                    while (($row = fgetcsv($handle)) !== false) {
+                                        if (count($row) >= 4 && stripos($row[2] ?? '', $queryLower) !== false) {
+                                            $match = true;
+                                            break;
+                                        }
+                                    }
+                                    fclose($handle);
+                                }
+                            } catch (Exception $e) {
+                                error_log('handleSearch artist error: ' . $e->getMessage());
+                            }
+                        }
+                    } elseif ($field === 'album') {
+                        if (stripos($filenameNoExt, $queryLower) !== false) {
+                            $match = true;
+                        }
+                    } elseif ($field === 'title') {
+                        $csvPath = Config::DIR_PLAYLISTS . $relativePath;
+                        if (file_exists($csvPath)) {
+                            try {
+                                $handle = fopen($csvPath, 'r');
+                                if ($handle !== false) {
+                                    fgetcsv($handle);
+                                    while (($row = fgetcsv($handle)) !== false) {
+                                        if (count($row) >= 4 && stripos($row[3] ?? '', $queryLower) !== false) {
+                                            $match = true;
+                                            break;
+                                        }
+                                    }
+                                    fclose($handle);
+                                }
+                            } catch (Exception $e) {
+                                error_log('handleSearch title error: ' . $e->getMessage());
+                            }
+                        }
+                    }
+                    
+                    if ($match) break;
+                }
+                
+if ($match) {
+$csvArtist = '';
+$csvAlbum = 'Inconnu';
+$csvPath = Config::DIR_PLAYLISTS . $relativePath;
+if (file_exists($csvPath)) {
+try {
+$handle = fopen($csvPath, 'r');
+if ($handle !== false) {
+fgetcsv($handle);
+$firstRow = fgetcsv($handle);
+fclose($handle);
+if ($firstRow && count($firstRow) >= 4) {
+$csvArtist = $firstRow[2] ?? '';
+$csvAlbum = (count($firstRow) >= 5) ? trim($firstRow[4]) : 'Inconnu';
+}
+}
+} catch (Exception $e) {
+error_log('handleSearch result error: ' . $e->getMessage());
+}
+}
+
+$results[] = [
+'path' => $relativePath,
+'filename' => $filename,
+'folderPath' => $folderPath,
+'artist' => $csvArtist,
+'album' => $csvAlbum,
+'style' => $parts[1] ?? '',
+'modified' => $file->getMTime()
+];
+}
+            }
+        }
+    } catch (Exception $e) {
+        error_log('handleSearch error: ' . $e->getMessage());
+    }
+    
+    usort($results, fn($a, $b) => $b['modified'] - $a['modified']);
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'files' => $results]);
+}
+
+// ============ RADIO ============
+// Retourne N vidéos aléatoires depuis dossier(s) spécifié(s)
+
+function handleRadio(): void {
+    $count = isset($_GET['count']) ? (int)$_GET['count'] : 50;
+    $folders = isset($_GET['folders']) ? explode(',', $_GET['folders']) : [];
+    
+    $count = max(1, min(500, $count));
+    
+    if (empty($folders)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'No folders']);
+        return;
+    }
+    
+    $allVideos = [];
+    foreach ($folders as $folder) {
+        $originalFolder = trim($folder);
+        if ($originalFolder) {
+            // Validation du chemin avec PathSanitizer (COR-002)
+            $cleanFolder = PathSanitizer::clean($originalFolder);
+            
+            // Vérifier que le chemin nettoyé n'est pas vide si l'original ne l'était pas
+            // (détection de tentative de path traversal avec ../)
+            if ($cleanFolder === '' && $originalFolder !== '') {
+                // Tentative de path traversal détectée - ignorer ce dossier
+                error_log('Path traversal détecté: ' . $originalFolder);
+                continue;
+            }
+            
+            // Vérifier que le chemin final reste dans le répertoire autorisé
+            $fullPath = Config::DIR_PLAYLISTS . $cleanFolder;
+            $realPath = realpath($fullPath);
+            $realBaseDir = realpath(Config::DIR_PLAYLISTS);
+            
+            if ($realPath === false || strpos($realPath, $realBaseDir) !== 0) {
+                // Chemin hors du répertoire autorisé
+                error_log('Chemin hors répertoire autorisé: ' . $cleanFolder);
+                continue;
+            }
+            
+            $allVideos = array_merge($allVideos, collectVideosFromFolder($cleanFolder));
+        }
+    }
+    
+    shuffle($allVideos);
+    $videos = array_slice($allVideos, 0, $count);
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'videos' => $videos, 'count' => count($videos)]);
+}
+
+// ============ COLLECT VIDEOS FROM FOLDER ============
+function collectVideosFromFolder(string $relativePath): array {
+    $videos = [];
+    $dir = Config::DIR_PLAYLISTS . $relativePath;
+    
+    if (!is_dir($dir)) {
+        return $videos;
+    }
+    
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        
+        foreach ($iterator as $file) {
+            if ($file->isFile() && strtolower($file->getExtension()) === 'csv') {
+                $csvPath = $file->getPathname();
+                try {
+                    $handle = fopen($csvPath, 'r');
+                    if ($handle !== false) {
+                        fgetcsv($handle);
+                        while (($row = fgetcsv($handle)) !== false) {
+                            if (count($row) >= 4) {
+                                $id = trim($row[0]);
+                                if (!empty($id) && strtolower($id) !== 'id') {
+$videos[] = [
+'id' => $id,
+'title' => trim($row[1]),
+'artist' => trim($row[2]),
+'song_title' => trim($row[3]),
+'album' => (count($row) >= 5) ? trim($row[4]) : 'Inconnu'
+];
+                                }
+                            }
+                        }
+                        fclose($handle);
+                    }
+                } catch (Exception $e) {
+                    error_log('collectVideosFromFolder error: ' . $e->getMessage());
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log('collectVideosFromFolder iterator error: ' . $e->getMessage());
+    }
+    
     return $videos;
 }
 
-/**
- * Extrait l'ID YouTube d'une URL ou retourne l'ID brut
- * @param string $input URL ou ID YouTube
- * @return string|null ID YouTube ou null si invalide
- */
-function extractVideoId($input) {
-    $input = trim($input);
-    
-    // Si c'est déjà un ID (11 caractères alphanumériques)
-    if (preg_match('/^[a-zA-Z0-9_-]{11}$/', $input)) {
-        return $input;
-    }
-    
-    // Patterns d'URL YouTube
-    $patterns = [
-        '/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/',
-        '/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/',
-        '/youtube\.com\/v\/([a-zA-Z0-9_-]{11})/'
-    ];
-    
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $input, $matches)) {
-            return $matches[1];
-        }
-    }
-    
-    return null;
-}
+// ============ MAIN ============
+// Point d'entrée API
 
-// ============ TRAITEMENT DES ACTIONS ============
+$action = isset($_GET[Config::PARAM_ACTION])
+    ? (string)$_GET[Config::PARAM_ACTION]
+    : '';
 
-try {
-    // Chemin de base : dossier storage/playlists
-    $basePath = dirname(__DIR__) . '/storage/playlists';
-    
-    // Vérifier que le dossier existe, sinon le créer
-    if (!is_dir($basePath)) {
-        @mkdir($basePath, 0755, true);
-    }
-    
-    if ($action === 'scan') {
-        // Scan d'un dossier - retourne folders[] et files[]
-        $relativePath = $_GET['path'] ?? '';
-        $relativePath = sanitizePath($relativePath);
-        
-        $scanResult = scanDirectory($basePath, $relativePath);
-        
-        $response = [
-            'success' => true,
-            'currentPath' => $relativePath,
-            'folders' => $scanResult['folders'],
-            'files' => $scanResult['files']
-        ];
-        
-    } elseif ($action === 'playlist') {
-        // Charger une playlist depuis un fichier CSV
-        $file = $_GET['file'] ?? '';
-        $path = $_GET['path'] ?? '';
-        
-        if (empty($file)) {
-            throw new Exception('Paramètre "file" requis');
-        }
-        
-        $videos = loadPlaylistFromCSV($basePath, $file, $path);
-        
-        $response = [
-            'success' => true,
-            'file' => $file,
-            'path' => $path,
-            'count' => count($videos),
-            'videos' => $videos
-        ];
-        
-    } elseif ($action === 'recent') {
-        // Retourner les derniers fichiers CSV modifiés
-        $limit = min((int)($_GET['limit'] ?? 20), 50);
-        
-        $allFiles = [];
-        
-        // Fonction récursive pour trouver tous les CSV
-        $findCsvFiles = function($relPath) use (&$findCsvFiles, &$allFiles, $basePath) {
-            $result = scanDirectory($basePath, $relPath);
-            
-            foreach ($result['files'] as $file) {
-                $fullPath = rtrim($basePath, '/') . '/' . sanitizePath($relPath);
-                if ($fullPath !== '') {
-                    $fullPath .= '/';
-                }
-                $fullPath .= $file;
-                
-                if (file_exists($fullPath)) {
-                    // Charger les métadonnées du premier vidéo du fichier
-                    $videos = loadPlaylistFromCSV($basePath, $file, $relPath);
-                    $firstVideo = !empty($videos) ? $videos[0] : null;
-                    
-                    $allFiles[] = [
-                        'filename' => $file,
-                        'folderPath' => $relPath,
-                        'file' => $file,
-                        'path' => $relPath,
-                        'artist' => $firstVideo['artist'] ?? 'Inconnu',
-                        'album' => $firstVideo['album'] ?? 'Inconnu',
-                        'style' => '',
-                        'modified' => filemtime($fullPath)
-                    ];
-                }
-            }
-            
-            foreach ($result['folders'] as $folder) {
-                $newRelPath = $relPath ? $relPath . '/' . $folder : $folder;
-                $findCsvFiles($newRelPath);
-            }
-        };
-        
-        $findCsvFiles('');
-        
-        // Trier par date de modification décroissante
-        usort($allFiles, function($a, $b) {
-            return $b['modified'] - $a['modified'];
-        });
-        
-        // Limiter le résultat
-        $recentFiles = array_slice($allFiles, 0, $limit);
-        
-        $response = [
-            'success' => true,
-            'count' => count($recentFiles),
-            'files' => $recentFiles
-        ];
-        
-    } elseif ($action === 'search') {
-        // Recherche dans tous les fichiers CSV
-        $query = $_GET['q'] ?? '';
-        $fields = $_GET['fields'] ?? 'artist,title,album';
-        
-        if (strlen($query) < 3) {
-            $response = [
-                'success' => true,
-                'query' => $query,
-                'files' => [],
-                'message' => 'Termes de recherche trop courts (minimum 3 caractères)'
-            ];
-        } else {
-            $searchFields = array_map('trim', explode(',', $fields));
-            $matchedFiles = [];
-            $seenFiles = [];
-            
-            // Fonction de recherche
-            $searchInFile = function($file, $path) use ($basePath, $query, $searchFields, &$matchedFiles, &$seenFiles) {
-                // Éviter les doublons
-                $fileKey = $path . '/' . $file;
-                if (isset($seenFiles[$fileKey])) {
-                    return;
-                }
-                $seenFiles[$fileKey] = true;
-                
-                $videos = loadPlaylistFromCSV($basePath, $file, $path);
-                $matchFound = false;
-                
-                foreach ($videos as $video) {
-                    $match = false;
-                    
-                    if (in_array('artist', $searchFields) && stripos($video['artist'], $query) !== false) {
-                        $match = true;
-                    }
-                    if (in_array('title', $searchFields) && stripos($video['song_title'], $query) !== false) {
-                        $match = true;
-                    }
-                    if (in_array('album', $searchFields) && stripos($video['album'], $query) !== false) {
-                        $match = true;
-                    }
-                    
-                    if ($match) {
-                        $matchFound = true;
-                        break;
-                    }
-                }
-                
-                if ($matchFound) {
-                    // Charger les métadonnées du premier vidéo
-                    $firstVideo = !empty($videos) ? $videos[0] : null;
-                    $matchedFiles[] = [
-                        'filename' => $file,
-                        'folderPath' => $path,
-                        'file' => $file,
-                        'path' => $path,
-                        'artist' => $firstVideo['artist'] ?? 'Inconnu',
-                        'album' => $firstVideo['album'] ?? 'Inconnu',
-                        'style' => ''
-                    ];
-                }
-            };
-            
-            // Parcourir tous les fichiers
-            $scanAll = function($relPath) use (&$scanAll, $basePath, $searchInFile) {
-                $result = scanDirectory($basePath, $relPath);
-                
-                foreach ($result['files'] as $file) {
-                    $searchInFile($file, $relPath);
-                }
-                
-                foreach ($result['folders'] as $folder) {
-                    $newRelPath = $relPath ? $relPath . '/' . $folder : $folder;
-                    $scanAll($newRelPath);
-                }
-            };
-            
-            $scanAll('');
-            
-            // Limiter à 100 résultats
-            $matchedFiles = array_slice($matchedFiles, 0, 100);
-            
-            $response = [
-                'success' => true,
-                'query' => $query,
-                'fields' => $searchFields,
-                'count' => count($matchedFiles),
-                'files' => $matchedFiles
-            ];
-        }
-        
-    } elseif ($action === 'scanRecursive') {
-        // Scan récursif complet pour l'expansion totale
-        $depth = (int)($_GET['depth'] ?? 10);
-        
-        $buildTree = function($relPath, $currentDepth) use (&$buildTree, $basePath) {
-            if ($currentDepth > $depth) {
-                return null;
-            }
-            
-            $result = scanDirectory($basePath, $relPath);
-            $tree = [
-                'folders' => [],
-                'files' => $result['files']
-            ];
-            
-            foreach ($result['folders'] as $folder) {
-                $newRelPath = $relPath ? $relPath . '/' . $folder : $folder;
-                $childTree = $buildTree($newRelPath, $currentDepth + 1);
-                if ($childTree && (count($childTree['folders']) > 0 || count($childTree['files']) > 0)) {
-                    $tree['folders'][$folder] = $childTree;
-                }
-            }
-            
-            return $tree;
-        };
-        
-        $tree = $buildTree('', 0);
-        
-        $response = [
-            'success' => true,
-            'tree' => $tree
-        ];
-        
-    } elseif ($action === 'radio') {
-        // Générer une playlist aléatoire
-        $count = min((int)($_GET['count'] ?? 10), 100);
-        $folders = $_GET['folders'] ?? '';
-        
-        $allVideos = [];
-        
-        if (!empty($folders)) {
-            $folderList = array_map('trim', explode(',', $folders));
-            
-            foreach ($folderList as $folder) {
-                $scanResult = scanDirectory($basePath, $folder);
-                
-                foreach ($scanResult['files'] as $file) {
-                    $videos = loadPlaylistFromCSV($basePath, $file, $folder);
-                    $allVideos = array_merge($allVideos, $videos);
-                }
-            }
-        } else {
-            // Tous les dossiers
-            $scanAll = function($relPath) use (&$scanAll, $basePath, &$allVideos) {
-                $result = scanDirectory($basePath, $relPath);
-                
-                foreach ($result['files'] as $file) {
-                    $videos = loadPlaylistFromCSV($basePath, $file, $relPath);
-                    $allVideos = array_merge($allVideos, $videos);
-                }
-                
-                foreach ($result['folders'] as $folder) {
-                    $newRelPath = $relPath ? $relPath . '/' . $folder : $folder;
-                    $scanAll($newRelPath);
-                }
-            };
-            
-            $scanAll('');
-        }
-        
-        // Mélanger et sélectionner
-        shuffle($allVideos);
-        $selected = array_slice($allVideos, 0, $count);
-        
-        $response = [
-            'success' => true,
-            'count' => count($selected),
-            'videos' => $selected
-        ];
-        
-    } else {
-        $response = [
+// Headers déjà définis en début de fichier (lignes 5-27)
+// Pas de duplication nécessaire
+
+switch ($action) {
+    case 'scan':
+        handleScan();
+        break;
+    case 'scanRecursive':
+        handleScanRecursive();
+        break;
+    case 'playlist':
+        handlePlaylist();
+        break;
+    case 'recent':
+        handleRecent();
+        break;
+    case 'search':
+        handleSearch();
+        break;
+    case 'radio':
+        handleRadio();
+        break;
+    default:
+        http_response_code(400);
+        echo json_encode([
             'success' => false,
-            'error' => 'Action inconnue: ' . htmlspecialchars($action),
-            'available_actions' => ['scan', 'playlist', 'recent', 'search', 'scanRecursive', 'radio']
-        ];
-    }
-    
-} catch (Exception $e) {
-    $response = [
-        'success' => false,
-        'error' => 'Erreur: ' . $e->getMessage()
-    ];
+            'error' => Config::MSG_ERROR_ACTION
+        ]);
 }
-
-echo json_encode($response);

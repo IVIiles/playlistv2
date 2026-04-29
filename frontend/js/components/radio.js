@@ -3,7 +3,6 @@
 // nombre de titres, lancement de la radio aléatoire.
 
 import { escapeHtml } from '../utils.js';
-import { LABELS_PLAYLIST } from '../constants/labels_playlist.js';
 
 const RADIO_CONFIG = {
     DEPTH: 2

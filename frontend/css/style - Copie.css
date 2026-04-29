@@ -1038,28 +1038,7 @@ input:focus-visible {
     #playlist-app {
         flex-direction: column;
         overflow-y: auto;
-        margin: 0px;
-	height: auto;
-    }
-
-    #playlist-app #playlist-header {
-	flex-direction: column;
-    }
-
-    #playlist-app .header-options-container {
-	margin-top: 10px;
-  	display: grid;
-        grid-template-columns: 1fr 1fr;   /* deux colonnes égales */
-        gap: 10px;
-    }
-
-    #playlist-app .main-content {
-  	display: flex;
-  	flex-direction: column;
-    }
-
-    .sidebar-toggle {
-        display: none;
+        margin: 5px;
     }
 
     .navigation-bar {
@@ -1077,26 +1056,9 @@ input:focus-visible {
         order: 3;
     }
 
-    #playlist-app .player-controls {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;                  /* au-dessus du contenu */
-    background: rgba(0, 0, 0, 0.8); /* fond semi-transparent (optionnel) */
-    padding: 10px 20px;
-    border-radius: 12px 12px 0 0;
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    }
-   
-    #playlist-app .player-btn {
-        padding: 10px 35px;
-    }
-
-    #playlist-app .video-player {
-	margin-bottom: 50px;
+    .shuffle-btn,
+    .player-btn {
+        padding: 15px 30px;
     }
 
     .sidebar.collapsed {

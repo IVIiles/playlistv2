@@ -1,4 +1,4 @@
-export const ICONS_PLAYLIST = {
+const ICONS_PLAYLIST = {
     ICON_HOME: '🏠',
     ICON_FOLDER: '📁',
     ICON_FOLDER_OPEN: '📂',

@@ -3,7 +3,6 @@
 // appel API de scraping, téléchargement du CSV généré.
 
 import { escapeHtml } from '../utils.js';
-import { LABELS_PLAYLIST } from '../constants/labels_playlist.js';
 
 export class ScrapperComponent extends EventTarget {
     /**
@@ -150,9 +149,9 @@ export class ScrapperComponent extends EventTarget {
                 );
             }
 
-            progressEl.style.display = 'none';
-            successEl.textContent = `✅ ${data.count} vidéos exportées avec succès !\nFichier: ${filename}`;
-            successEl.style.display = 'block';
+      progressEl.style.display = 'none';
+      successEl.textContent = `✅ ${escapeHtml(String(data.count))} vidéos exportées avec succès !\nFichier: ${escapeHtml(filename)}`;
+      successEl.style.display = 'block';
 
             // Réinitialisation du champ
             urlInput.value = '';
